@@ -16,7 +16,7 @@ var conf_file = './config/config.json';
 if( ! fs.existsSync(conf_file) ) {
     fs.writeFileSync( conf_file, JSON.stringify(conf_defaults,null, 2) );
     console.log('created config file - set your api key in '+conf_file);
-    return;
+    process.exit();
 }
 // load the config file
 var nconf = require('nconf');
@@ -117,7 +117,7 @@ rl.on('line', (line) => {
 			};
 			rp(options)
 			    .then(function (body) {
-			        console.log(colors.success('Success! '+body)); 
+			        console.log(colors.success('Success! '+body));
 			    })
 			    .catch(function (err) {
 			        console.log(colors.error('Fail! '+err));
@@ -126,7 +126,7 @@ rl.on('line', (line) => {
   	});
   }
 
-  
+
 }).on('close', () => {
   console.log('End of input');
 });
