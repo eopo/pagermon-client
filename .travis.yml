@@ -1,5 +1,3 @@
-//TravisCI Intigration with the Pagermon-cleint!
-//
 language: node_js
 node_js:
   - "node"
