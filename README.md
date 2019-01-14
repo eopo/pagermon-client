@@ -27,6 +27,14 @@ Some environments send additional information via the "Function Code" in the pag
 
 Check the samples dir for example usage.
 
+## Support 
+
+General PagerMon support can be requested in the #support channel of the PagerMon discord server.
+
+[Click Here](https://discord.gg/3VK7gSD) to join
+
+Bugs and Feature requests can be logged via the GitHub issues page. 
+
 ## Contributing
 
 All are welcome to contribute.
