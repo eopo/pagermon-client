@@ -59,3 +59,8 @@ typings/
 
 # next.js build output
 .next
+
+# migrated from main repo
+config/config.json
+config/backup.json
+samples/testymctest.sh
