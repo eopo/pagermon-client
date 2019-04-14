@@ -40,7 +40,9 @@ colors.setTheme({
 /**
  * Variable initialization
  */
-let frag = {};
+let frag = {};  //Keeper variable for fragmented FLEX-messages
+
+//TODO: Use nconf for the following
 const conf_defaults = JSON.parse(fs.readFileSync('./config/default.json', 'utf8'));
 const conf_file = './config/config.json';
 const functionAlphaNum = {
@@ -52,9 +54,9 @@ const functionAlphaNum = {
 
 
 /**
- * Read config. If no config exists, take 'default' as template.
+ * Read in config. If no config exists, take 'default' as template.
  */
-
+//TODO: Use nconf for that.
 if( ! fs.existsSync(conf_file) ) {
     console.log('Please input a pagermon API key:');
     conf_defaults.apikey = process.stdin.on('data', function(data) { return data; });
@@ -101,8 +103,7 @@ nconf.argv({
 const uri = nconf.get('hostname')+":"+nconf.get('port')+nconf.get('apiEndpoint');
 
 /**
- * Standard Input
- * @type {Interface}
+ * Reading the input. If input, use Message.handleMessage
  */
 const rl = readline.createInterface({
     input: process.stdin,
@@ -115,15 +116,16 @@ rl.on('line', (line) => {
 
 
 /**
- * Class definitions
+ * class Message
+ * Provides static methods for message handling as well as a template for messages.
  */
-
 class Message {
     constructor() {
         this._timestamp = moment();
     }
     set address(address) {
         if (address.length() < 7) {
+            //Pad all digits to at least a length of 7
             this._address = padDigits(address, 7);
         }
     }
@@ -150,6 +152,7 @@ class Message {
     }
 
     get time () {
+        //For logging purposes
         return Message.humanizeTime(this._timestamp)
     }
 
@@ -157,11 +160,22 @@ class Message {
         return timestamp.format("YYYY-MM-DD HH:mm:ss")
     }
 
+    /**
+     * getProtocol
+     * Determines which protocol is used and how the message has to be processed
+     * @param raw
+     * @returns {string}
+     */
     static getProtocol(raw) {
         if (/^POCSAG(\d+):/.test(raw)) return 'POCSAG';
         else if (/^FLEX/.test(raw)) return 'FLEX';
     }
 
+    /**
+     * POCSAG specific handling
+     * @param raw
+     * @returns {Message}
+     */
     static handlePocsag(raw) {
         const message = new Message();
         const matched = raw.match(/POCSAG(\d+): Address:(.*?)Function: (\d)/);
@@ -181,20 +195,26 @@ class Message {
         return message;
     }
 
+    /**
+     * Flex specific handling
+     * @param raw
+     * @returns {Message}
+     */
     static handleFlex(raw) {
         const matched = raw.match(/FLEX:.*? 0-9]{4}\/[0-9]\/([FCK]?)\/.( ALN | GPN | NUM) \[(\d*?)] (.*?)$/);
         const address = matched[3].trim();
         const controlChar = matched[1];
+        let message;
         if (controlChar === 'F') {
             frag[address] = matched[4].trim();
             return null;
         } else if (controlChar === 'C') {
-            const message = new Message();
+            message = new Message();
             message.messageType = matched[2].trim();
             message.address = address;
             message.message = frag[address]+matched[4].trim();
         } else {
-            const message = new Message();
+            message = new Message();
             message.messageType = matched[2].trim();
             message.address = address;
             message.message = matched[4];
@@ -202,15 +222,19 @@ class Message {
         return message;
     }
 
+    /**
+     * General Message handling, including sending and or error logging
+     * @param raw
+     */
     static handleMessage(raw) {
         let message;
         if (Message.getProtocol(raw) === "POCSAG") {
             message = Message.handlePocsag(raw);
         } else if (Message.getProtocol(raw) === "FLEX") {
             message = Message.handleFlex(raw)
-        } else return null;
+        } else return;
         if (message != null) {
-            console.log(colors.red(message.timeHuman+': ')+colors.yellow(message.address+': ')+colors.success(message.message));
+            console.log(colors.red(message.time+': ')+colors.yellow(message.address+': ')+colors.success(message.message));
             sendPage(Message, 0);
         } else {
             console.log(colors.red(Message.humanizeTime(moment())+': ')+colors.grey(raw));
@@ -218,8 +242,14 @@ class Message {
     }
 }
 
-var sendPage = function(message,retries) {
-    var options = {
+
+/**
+ * Sending message
+ * @param message
+ * @param retries
+ */
+let sendPage = function(message,retries) {
+    const options = {
         method: 'POST',
         uri: uri,
         headers: {
@@ -236,7 +266,7 @@ var sendPage = function(message,retries) {
         .catch(function (err) {
             console.log(colors.yellow('Message failed to deliver. '+err));
             if (retries < 10) {
-                var retryTime = Math.pow(2, retries) * 1000;
+                const retryTime = Math.pow(2, retries) * 1000;
                 retries++;
                 console.log(colors.yellow(`Retrying in ${retryTime} ms`));
                 setTimeout(sendPage, retryTime, message, retries);
@@ -246,6 +276,12 @@ var sendPage = function(message,retries) {
         });
 };
 
-var padDigits = function(number, digits) {
+/**
+ * Padding function
+ * @param number
+ * @param digits
+ * @returns {string}
+ */
+let padDigits = function(number, digits) {
     return Array(Math.max(digits - String(number).length + 1, 0)).join(0) + number;
 };
