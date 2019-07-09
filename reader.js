@@ -26,7 +26,7 @@ const moment = require('moment');
 const colors = require('colors/safe');
 const readline = require('readline');
 
-var uri = hostname+"/api/messages";
+
 
 var http = require('http');
 var request = require('request');
@@ -41,9 +41,9 @@ colors.setTheme({
  * Variable initialization
  */
 let frag = {};  //Keeper variable for fragmented FLEX-messages
+let queue = [];
 
 //TODO: Use nconf for the following
-const conf_defaults = JSON.parse(fs.readFileSync('./config/default.json', 'utf8'));
 const conf_file = './config/config.json';
 const functionAlphaNum = {
     0: 'a',
@@ -51,20 +51,6 @@ const functionAlphaNum = {
     2: 'c',
     3: 'd'
 };
-
-
-/**
- * Read in config. If no config exists, take 'default' as template.
- */
-//TODO: Use nconf for that.
-if( ! fs.existsSync(conf_file) ) {
-    console.log('Please input a pagermon API key:');
-    conf_defaults.apikey = process.stdin.on('data', function(data) { return data; });
-    fs.writeFileSync( conf_file, JSON.stringify(conf_defaults,null, 2) );
-    console.log('A config file containing your API key has been generated at '+conf_file);
-
-    return;
-}
 
 
 /**
@@ -89,8 +75,6 @@ nconf.argv({
             parseValues: true,
         }
     })
-    .env()
-    .file({file: conf_file})
     .defaults({
         "hostname": "http://127.0.0.1",
         "port": "3000",
@@ -98,9 +82,12 @@ nconf.argv({
         "apiEndpoint": "/api/messages",
 
     })
-    .required(['apikey','port','hostname','identifier']);
+    .file({file: conf_file});
 
-const uri = nconf.get('hostname')+":"+nconf.get('port')+nconf.get('apiEndpoint');
+
+nconf.required(['apikey','port','hostname','identifier']);
+
+const serverURL = nconf.get('hostname')+":"+nconf.get('port')+nconf.get('apiEndpoint');
 
 /**
  * Reading the input. If input, use Message.handleMessage
@@ -124,10 +111,12 @@ class Message {
         this._timestamp = moment();
     }
     set address(address) {
-        if (address.length() < 7) {
+/**        if (address.length < 7) {
             //Pad all digits to at least a length of 7
             this._address = padDigits(address, 7);
-        }
+       }
+**/
+    this._address = address;
     }
     get address() {
         return this._address;
@@ -235,6 +224,7 @@ class Message {
         } else return;
         if (message != null) {
             console.log(colors.red(message.time+': ')+colors.yellow(message.address+': ')+colors.success(message.message));
+            console.log(message);
             sendPage(Message, 0);
         } else {
             console.log(colors.red(Message.humanizeTime(moment())+': ')+colors.grey(raw));
@@ -248,10 +238,11 @@ class Message {
  * @param message
  * @param retries
  */
+
 let sendPage = function(message,retries) {
     const options = {
         method: 'POST',
-        uri: uri,
+        uri: serverURL,
         headers: {
             'X-Requested-With': 'XMLHttpRequest',
             'User-Agent': 'PagerMon reader.js',
@@ -261,17 +252,22 @@ let sendPage = function(message,retries) {
     };
     rp(options)
         .then(function (body) {
-            // console.log(colors.success('Message delivered. ID: '+body));
+             console.log(colors.success('Message delivered. ID: '+body));
+             while (queue.length < 0) {
+                 this(queue.shift);
+                 console.log('Delivered one Message from Queue!');
+             }
         })
         .catch(function (err) {
             console.log(colors.yellow('Message failed to deliver. '+err));
-            if (retries < 10) {
+            if (retries < 2) {
                 const retryTime = Math.pow(2, retries) * 1000;
                 retries++;
                 console.log(colors.yellow(`Retrying in ${retryTime} ms`));
                 setTimeout(sendPage, retryTime, message, retries);
             } else {
-                console.log(colors.yellow('Message failed to deliver after 10 retries, giving up'));
+                console.log(colors.yellow('Message failed to deliver after 10 retries, giving up and putting it in queue'));
+                queue.push(message);
             }
         });
 };
